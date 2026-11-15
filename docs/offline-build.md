@@ -44,17 +44,50 @@ Minecraft: Java Edition 26.3, as every Horizon build does ([native-client.md](na
 
 1. The player name: `HORIZON_PLAYER_NAME`, else the first line of `player-name.txt` beside the
    script, else it asks and keeps the answer there. 3 to 16 letters, digits or underscores.
-2. `horizon-prepare --check`. When it reports a gap: `horizon-prepare --prepare --complete`.
-   The server jar is `HORIZON_SERVER_JAR`, else `server.jar` beside the script, else the script
+2. `horizon-prepare --check`. When it reports a gap, the rest of this list, then
+   `horizon-prepare --prepare --complete`.
+3. The launcher folder to read Minecraft from, handed to horizon-prepare as
+   `HORIZON_MINECRAFT_DIR`: the variable itself when the player set it, else the first line of
+   `minecraft-dir.txt` beside the script, else, when the official launcher has no copy of the
+   pinned version, the first of these that has one (below). Otherwise nothing: horizon-prepare
+   looks in the official launcher's, ATLauncher's and the CurseForge app's folders itself.
+4. The server jar: `HORIZON_SERVER_JAR`, else `server.jar` beside the script, else the script
    downloads the address the player's own `versions/26.3/26.3.json` names
    (`downloads.server.url`, a `mojang.com` address only); horizon-prepare checks its checksum
-   against `research-lock.json` as it does for every file. `HORIZON_MINECRAFT_DIR` names a game
-   folder that is not the official launcher's default.
-3. When preparing fails with nothing prepared, it stops with horizon-prepare's message. When
-   only something optional is missing (the sounds, say), it asks whether to start anyway.
-4. `horizon-client --resources .local/horizon-client/26.3 --game-dir game --home game --name NAME`,
+   against `research-lock.json` as it does for every file. A Prism-family folder has no such file
+   and needs no server jar: horizon-prepare takes the server side from its client jar.
+5. When preparing fails with nothing prepared, it stops with horizon-prepare's message, and
+   names each Prism-family folder it found without the pinned version. When only something
+   optional is missing (the sounds, say), it asks whether to start anyway.
+6. `horizon-client --resources .local/horizon-client/26.3 --game-dir game --home game --name NAME`,
    with the script's own arguments after them. Saves, options, logs and crash reports stay in
    `game/` in the folder, apart from an official Horizon install's.
+
+### PineconeMC and Prism Launcher
+
+horizon-prepare reads a Prism Launcher or MultiMC root as a whole (`artifacts.rs`,
+`prism_game_files`: the Minecraft component in `meta/net.minecraft/`, the client jar and the
+libraries in `libraries/`, `assets/`), but only where it is told to look: in upstream the Horizon
+launcher finds those folders for it (`launcher/src/sources.rs`, `known_folders`). The start
+script stands in for that, for the launchers below. A root has the version when it holds
+`meta/net.minecraft/<version>.json` and
+`libraries/com/mojang/minecraft/<version>/minecraft-<version>-client.jar`, which the launcher
+downloads the first time the player starts an instance of that version.
+
+| Launcher | Windows | Linux |
+|---|---|---|
+| PineconeMC (ElyPrismLauncher) | `ELYPRISMLAUNCHER_DATA_DIR`, `%APPDATA%\ElyPrismLauncher`, `%APPDATA%\PineconeMC` | `ELYPRISMLAUNCHER_DATA_DIR`, `ElyPrismLauncher` and `PineconeMC` in `$XDG_DATA_HOME` (`~/.local/share`), the Flatpak's `~/.var/app/io.github.elyprismlauncher.ElyPrismLauncher/data/ElyPrismLauncher`, the snap's `~/snap/pineconemc/common` |
+| Prism Launcher | `%APPDATA%\PrismLauncher` | `PrismLauncher` in `$XDG_DATA_HOME`, the Flatpak's `~/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher` |
+
+PineconeMC is a fork of Prism Launcher with the same layout. Its data folder is named after the
+project's first name, ElyPrismLauncher (`Launcher_CommonName` in its `program_info/CMakeLists.txt`),
+and `ELYPRISMLAUNCHER_DATA_DIR` is the variable it reads itself; `PineconeMC` is looked in too
+in case a later version renames the folder. Its own metadata server describes 26.3 with the
+client jar and the asset index research-lock.json pins, so its files pass the same checks as the
+official launcher's. A portable install keeps its data where it was unpacked (`UserData` there,
+when it exists), which no script can guess: the player writes that folder into
+`minecraft-dir.txt`. The Java such a launcher downloads for the game is a runtime without
+`javac`, so the JDK is still needed.
 
 ## Building and publishing
 
@@ -67,8 +100,9 @@ is replaced. To publish a new build, raise the number in `VERSION` and push.
 
 It takes no secret and no self-hosted runner. Its checks are the ones a runner can make without
 Minecraft: every program starts and reports the version, the programs import only system
-libraries (`tools/check_imports.py`), and the start script takes a name, runs horizon-prepare and
-stops at its error. The game is not played there: upstream's smoke run (a new world, 1500 frames)
+libraries (`tools/check_imports.py`), the start script takes a name, runs horizon-prepare and
+stops at its error, and it finds a stand-in PineconeMC folder and hands it to horizon-prepare. The
+game is not played there, and no real launcher's files are read: upstream's smoke run (a new world, 1500 frames)
 needs prepared resources, which only a machine with Minecraft has.
 
 By hand, from a checkout:

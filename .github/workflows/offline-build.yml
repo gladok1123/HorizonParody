@@ -144,7 +144,48 @@ jobs:
           [[ "$status" -ne 0 ]] || { echo "::error::the start script succeeded without Minecraft"; exit 1; }
           grep -q 'Preparing Horizon from your Minecraft' "$RUNNER_TEMP/play.log"
           grep -q 'Preparing failed' "$RUNNER_TEMP/play.log"
-          # Nothing the test run wrote goes into the archive.
+          rm -rf .local game player-name.txt server.jar
+      - name: The start script finds PineconeMC
+        # A stand-in PineconeMC data folder that claims the pinned version, in a stand-in home: the script must
+        # name it and hand it to horizon-prepare, which refuses the stand-in jar. What horizon-prepare said about
+        # the folder is kept as a notice on the run.
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' research-lock.json | head -1)
+          home="$RUNNER_TEMP/stand-in-home"
+          rm -rf "$home"
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            root="$home/ElyPrismLauncher"
+            mkdir -p "$root"
+            export APPDATA="$(cygpath -w "$home")"
+          else
+            root="$home/.local/share/ElyPrismLauncher"
+            mkdir -p "$root"
+            export HOME="$home"
+            unset XDG_DATA_HOME
+          fi
+          mkdir -p "$root/meta/net.minecraft" "$root/libraries/com/mojang/minecraft/$version" "$root/assets" "$root/instances"
+          printf '{"formatVersion": 1, "uid": "net.minecraft", "version": "%s", "mainJar": {"name": "com.mojang:minecraft:%s:client"}}\n' \
+            "$version" "$version" > "$root/meta/net.minecraft/$version.json"
+          echo "not the game" > "$root/libraries/com/mojang/minecraft/$version/minecraft-$version-client.jar"
+          export HORIZON_PLAYER_NAME=Tester
+          export HORIZON_HOME="$RUNNER_TEMP/horizon-home"
+          unset HORIZON_MINECRAFT_DIR ELYPRISMLAUNCHER_DATA_DIR
+          cd "dist/${{ matrix.dir }}"
+          status=0
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            cmd //c play.bat < /dev/null > "$RUNNER_TEMP/pinecone.log" 2>&1 || status=$?
+          else
+            ./play.sh < /dev/null > "$RUNNER_TEMP/pinecone.log" 2>&1 || status=$?
+          fi
+          cat "$RUNNER_TEMP/pinecone.log"
+          [[ "$status" -ne 0 ]] || { echo "::error::the start script succeeded on a stand-in PineconeMC folder"; exit 1; }
+          grep -q "Reading Minecraft $version from PineconeMC" "$RUNNER_TEMP/pinecone.log" \
+            || { echo "::error::the start script did not find the PineconeMC folder"; exit 1; }
+          grep -q 'Preparing failed' "$RUNNER_TEMP/pinecone.log"
+          said=$(grep -m 1 -i '^error' "$RUNNER_TEMP/pinecone.log" | tr -d '\r' | cut -c1-600 || true)
+          echo "::notice title=horizon-prepare on a stand-in PineconeMC folder (${{ matrix.name }})::${said:-no error line}"
+          # Nothing the test runs wrote goes into the archive.
           rm -rf .local game player-name.txt server.jar
       - name: Archive
         run: |

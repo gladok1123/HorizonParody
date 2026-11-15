@@ -5,7 +5,8 @@
 #   ./play.sh [options of horizon-client]
 #
 # HORIZON_PLAYER_NAME   the player name, instead of asking and keeping it in player-name.txt
-# HORIZON_MINECRAFT_DIR the official launcher's game folder, when it is not ~/.minecraft
+# HORIZON_MINECRAFT_DIR the launcher folder to read Minecraft from, instead of the first line of
+#                       minecraft-dir.txt and of the folders looked in below
 # HORIZON_SERVER_JAR    the pinned server jar, when it is not server.jar in this folder
 set -euo pipefail
 
@@ -36,8 +37,56 @@ while ! valid "$name"; do
 done
 [[ -n "${HORIZON_PLAYER_NAME:-}" ]] || printf '%s\n' "$name" > "$name_file"
 
+# Whether a PineconeMC, Prism Launcher or MultiMC root has the pinned version: its Minecraft
+# component and the client jar, where horizon-prepare reads them (artifacts.rs, prism_game_files).
+has_version() {
+  [[ -f "$1/meta/net.minecraft/$version.json" \
+    && -f "$1/libraries/com/mojang/minecraft/$version/minecraft-$version-client.jar" ]]
+}
+
+# The launcher folder horizon-prepare reads Minecraft from, where the player named none.
+# horizon-prepare itself looks in the official launcher's, ATLauncher's and the CurseForge app's;
+# the Horizon launcher finds the others for it, and this script stands in for that: PineconeMC
+# (ElyPrismLauncher, whose data folder keeps that name) and Prism Launcher, when the official
+# launcher has no copy of the version.
+without=()
+minecraft_dir() {
+  [[ -z "${HORIZON_MINECRAFT_DIR:-}" ]] || return 0
+  local chosen="$here/minecraft-dir.txt" dir
+  if [[ -f "$chosen" ]]; then
+    dir=$(head -n 1 "$chosen" | tr -d '\r\n')
+    if [[ -n "$dir" ]]; then
+      export HORIZON_MINECRAFT_DIR="$dir"
+      echo "Reading Minecraft from $dir (minecraft-dir.txt)"
+      return 0
+    fi
+  fi
+  local official="$HOME/.minecraft/versions/$version/$version"
+  [[ ! ( -f "$official.json" && -f "$official.jar" ) ]] || return 0
+  local data=${XDG_DATA_HOME:-$HOME/.local/share} flatpak="$HOME/.var/app" launcher root
+  while IFS='|' read -r launcher root; do
+    [[ -n "$root" ]] || continue
+    if has_version "$root"; then
+      export HORIZON_MINECRAFT_DIR="$root"
+      echo "Reading Minecraft $version from $launcher: $root"
+      return 0
+    fi
+    [[ ! -d "$root/instances" ]] || without+=("$launcher ($root)")
+  done <<FOLDERS
+PineconeMC|${ELYPRISMLAUNCHER_DATA_DIR:-}
+PineconeMC|$data/ElyPrismLauncher
+PineconeMC|$data/PineconeMC
+PineconeMC|$flatpak/io.github.elyprismlauncher.ElyPrismLauncher/data/ElyPrismLauncher
+PineconeMC|$HOME/snap/pineconemc/common
+Prism Launcher|$data/PrismLauncher
+Prism Launcher|$flatpak/org.prismlauncher.PrismLauncher/data/PrismLauncher
+FOLDERS
+}
+
 # The pinned server jar, where the player gave none: the address their own launcher's version
 # file names (Mojang's public download). horizon-prepare checks its checksum before using it.
+# PineconeMC, Prism Launcher and MultiMC keep no such file and need no server jar: horizon-prepare
+# takes the server side from their client jar.
 server_jar() {
   [[ -z "${HORIZON_SERVER_JAR:-}" ]] || return 0
   local jar="$here/server.jar"
@@ -65,9 +114,16 @@ echo "Checking the prepared resources"
 if ! "$prepare" --check; then
   echo
   echo "Preparing Horizon from your Minecraft $version (a few minutes, once)"
+  minecraft_dir
   server_jar
   if ! "$prepare" --prepare --complete; then
-    [[ -f "$resources/horizon-resources.json" ]] || fail "Preparing failed: the lines above say what is missing. PLAY.txt lists what the first run needs."
+    if [[ ! -f "$resources/horizon-resources.json" ]]; then
+      for launcher in ${without[@]+"${without[@]}"}; do
+        printf '\n%s has no Minecraft %s yet: create a %s instance there and start it once, then run this again.\n' \
+          "$launcher" "$version" "$version" >&2
+      done
+      fail "Preparing failed: the lines above say what is missing. PLAY.txt lists what the first run needs."
+    fi
     echo
     read -r -p "The resources are incomplete (see above). Start the game anyway? [y/N] " answer || answer=n
     [[ "$answer" == [yY]* ]] || exit 1

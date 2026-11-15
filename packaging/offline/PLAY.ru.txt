@@ -12,11 +12,13 @@ Microsoft и не одобрен ими. Minecraft — товарный знак
 пустит, как и любого игрока без входа.
 
 Что нужно для первого запуска
-  1. Minecraft Java Edition 26.3, установленный официальным лаунчером и
-     запущенный хотя бы один раз, чтобы его файлы были на компьютере.
+  1. Minecraft Java Edition 26.3 на этом компьютере, скачанный лаунчером,
+     которым вы играете: официальным, PineconeMC (ElyPrismLauncher) или Prism
+     Launcher. Запустите в нём 26.3 один раз, чтобы лаунчер скачал файлы игры.
   2. Java 25 JDK (именно JDK, а не только среда выполнения: при первом запуске
      javac компилирует собственные экспортёры Horizon), например Eclipse
-     Temurin 25 с adoptium.net.
+     Temurin 25 с adoptium.net. Java, которую лаунчер сам скачивает для игры, —
+     только среда выполнения, она не подойдёт.
 
 Как играть
   Windows: двойной щелчок по play.bat.     Linux: ./play.sh
@@ -25,20 +27,33 @@ Microsoft и не одобрен ими. Minecraft — товарный знак
   и запустит игру. Следующие запуски сразу открывают игру.
   Миры, настройки, снимки экрана и журналы лежат здесь, в папке game.
 
+Где он ищет ваш Minecraft
+  Скрипт запуска и horizon-prepare смотрят по порядку:
+    - папку из переменной HORIZON_MINECRAFT_DIR, если она задана;
+    - папку из первой строки файла minecraft-dir.txt в этой папке;
+    - папку официального лаунчера;
+    - папку данных PineconeMC: %APPDATA%\ElyPrismLauncher в Windows,
+      ~/.local/share/ElyPrismLauncher в Linux (а также его папки Flatpak и
+      snap и переменную ELYPRISMLAUNCHER_DATA_DIR);
+    - папку данных Prism Launcher (PrismLauncher в тех же местах);
+    - папки ATLauncher и приложения CurseForge.
+  Портативный PineconeMC или Prism Launcher хранит файлы там, куда его
+  распаковали (в папке UserData, если она есть), MultiMC тоже: впишите эту
+  папку в minecraft-dir.txt. В PineconeMC и Prism Launcher её открывает
+  пункт меню Folders > Launcher Root Folder (корневая папка лаунчера).
+  Каждый файл сверяется с контрольными суммами из research-lock.json, поэтому
+  файлы должны быть оригинальными файлами 26.3, каким бы лаунчером они ни
+  были скачаны.
+
 Что делает первый запуск
   Он выполняет в этой папке:
     horizon-prepare --prepare --complete
-  horizon-prepare читает ваш Minecraft 26.3 из папки официального лаунчера и
-  сверяет каждый файл с контрольными суммами из research-lock.json.
-  Ему нужен ещё серверный jar версии 26.3. Скрипт запуска ищет server.jar в
-  этой папке; если его нет, скачивает по адресу из файла
+  С официальным лаунчером нужен ещё серверный jar версии 26.3. Скрипт запуска
+  ищет server.jar в этой папке; если его нет, скачивает по адресу из файла
   versions/26.3/26.3.json вашего лаунчера (downloads.server.url, загрузка с
   серверов Mojang). Можно положить файл самому под именем server.jar или
-  указать путь в переменной HORIZON_SERVER_JAR.
-  Если игра установлена в другом месте, укажите папку в переменной
-  HORIZON_MINECRAFT_DIR. Для Prism Launcher или MultiMC один раз выполните
-  вручную:
-    horizon-prepare --prepare --complete --prism-dir ПУТЬ
+  указать путь в переменной HORIZON_SERVER_JAR. Для PineconeMC, Prism Launcher
+  и MultiMC он не нужен.
   Остальные параметры: horizon-prepare --help.
 
 Запуск игры вручную

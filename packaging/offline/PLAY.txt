@@ -12,10 +12,12 @@ and play: single player, LAN, and servers that do not check accounts
 refuses any player who is not signed in.
 
 What the first run needs
-  1. Minecraft Java Edition 26.3, installed by the official launcher and
-     started once, so its files are on this computer.
+  1. Minecraft Java Edition 26.3 on this computer, downloaded by the launcher
+     you play with: the official launcher, PineconeMC (ElyPrismLauncher) or
+     Prism Launcher. Start 26.3 there once, so the launcher has its files.
   2. A Java 25 JDK (not only a runtime: the first run compiles Horizon's own
      exporters with javac), for example Eclipse Temurin 25 from adoptium.net.
+     The Java your launcher downloads for the game is a runtime only.
 
 Playing
   Windows: double-click play.bat.     Linux: ./play.sh
@@ -24,18 +26,31 @@ Playing
   starts the game. Later runs start the game at once.
   Saves, options, screenshots and logs are in the game folder here.
 
+Where it finds your Minecraft
+  The start script and horizon-prepare look, in this order, in:
+    - the folder in HORIZON_MINECRAFT_DIR, when it is set;
+    - the folder on the first line of minecraft-dir.txt in this folder;
+    - the official launcher's folder;
+    - PineconeMC's data folder: %APPDATA%\ElyPrismLauncher on Windows,
+      ~/.local/share/ElyPrismLauncher on Linux (also its Flatpak and snap
+      folders, and ELYPRISMLAUNCHER_DATA_DIR);
+    - Prism Launcher's data folder (PrismLauncher in the same places);
+    - ATLauncher's and the CurseForge app's.
+  A portable PineconeMC or Prism Launcher keeps its files where it was
+  unpacked (in its UserData folder when there is one), and MultiMC likewise:
+  write that folder into minecraft-dir.txt. In PineconeMC and Prism Launcher,
+  Folders > Launcher Root Folder opens it.
+  Every file is checked against the checksums in research-lock.json, so the
+  files must be the original 26.3 ones, whichever launcher downloaded them.
+
 What the first run does
   It runs, in this folder:
     horizon-prepare --prepare --complete
-  horizon-prepare reads your Minecraft 26.3 from the official launcher's
-  folder and checks every file against the checksums in research-lock.json.
-  It also needs the 26.3 server jar. The start script looks for server.jar in
-  this folder; without one it downloads the address your launcher's
-  versions/26.3/26.3.json names (downloads.server.url, Mojang's own download).
-  To give it yourself, save it here as server.jar or set HORIZON_SERVER_JAR.
-  If the game is elsewhere, set HORIZON_MINECRAFT_DIR to that folder. For a
-  Prism Launcher or MultiMC install run, once, by hand:
-    horizon-prepare --prepare --complete --prism-dir PATH
+  With the official launcher it also needs the 26.3 server jar. The start
+  script looks for server.jar in this folder; without one it downloads the
+  address your launcher's versions/26.3/26.3.json names (downloads.server.url,
+  Mojang's own download). To give it yourself, save it here as server.jar or
+  set HORIZON_SERVER_JAR. PineconeMC, Prism Launcher and MultiMC need none.
   horizon-prepare --help lists the other options.
 
 Starting the game yourself
