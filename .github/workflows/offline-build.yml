@@ -43,8 +43,8 @@ jobs:
             # The C runtime linked in, so the game runs without the Visual C++ redistributable.
             rustflags: -C target-feature=+crt-static
     runs-on: ${{ matrix.os }}
-    # A private repository's runners have two cores: the release profile (thin LTO, one codegen unit) takes them
-    # far longer than the 40 minutes game-build.yml allows on four.
+    # Room for a build without a cache, and for a private repository's two-core runners: the release profile
+    # (thin LTO, one codegen unit) takes those far longer than the 40 minutes game-build.yml allows on four.
     timeout-minutes: 170
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
