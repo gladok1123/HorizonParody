@@ -762,6 +762,16 @@ leaving its school, a parrot imitating, a brain's durations) come from a random 
 on different threads do not wait for each other. The odds are vanilla's; the values are not the ones the level's
 random would have given ([mob-islands.md](mob-islands.md#every-turn-draws-its-own-random)).
 
+### A core for the server thread: `HORIZON_CORE_PLAN`
+
+On by default, on Linux and Windows, on a machine with at least 3 cores (and 4 hardware threads): the game keeps
+one core for the server thread, whole from 4 cores up, and confines its worker threads (world generation, light,
+chunk encoding) to the others, so a tick never waits for a worker to leave its core. The log says which at the
+start: `frames and ticks keep CPUs 0,4, the helper threads run on CPUs 1-3,5-7`. It only counts the CPUs the
+server may use (`taskset`, a container's cpuset). `HORIZON_CORE_PLAN=off` in the server's environment turns it
+off: every thread is then where the system puts it, as before ([how it works](core-plan.md)). It has not been
+benchmarked yet.
+
 ### Mob AI far from players: `[entities] dab`
 
 Off by default, because it is not vanilla's behaviour: mobs far from every player react more slowly. It is

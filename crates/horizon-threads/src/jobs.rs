@@ -168,7 +168,9 @@ static POOL: OnceLock<Pool> = OnceLock::new();
 /// The number of workers the machine gets by default: one thread per core
 /// but one ([`crate::default_workers`]: per performance core on Apple silicon), which the
 /// render and server threads share with them (they run ahead of the workers:
-/// [`crate::favour_current`], [`crate::behind_server`]).
+/// [`crate::favour_current`], [`crate::behind_server`]). Under a core plan
+/// ([`crate::cores`]) the workers keep off the cores of those threads, and
+/// there are no more of them than the CPUs they are left.
 pub fn default_threads() -> usize {
     crate::default_workers()
 }

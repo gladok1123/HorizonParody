@@ -6,6 +6,8 @@ pub mod allocator_stats;
 /// The game window's boot screen, before wgpu's first frame paints over it.
 #[cfg(target_os = "windows")]
 pub mod boot_paint;
+/// The core plan: the cores kept for the render and server threads, and the helpers' cores.
+pub mod cores;
 pub mod heap_census;
 #[cfg(target_os = "linux")]
 pub mod heap_sample;
@@ -151,9 +153,11 @@ mod par_chunks_tests {
 /// counting on Apple silicon only its performance cores. Its efficiency cores are slower,
 /// and workers there kept the render and server threads waiting for a performance core: on
 /// a base M4 (4 performance and 6 efficiency cores) a fast flight's p99 frame went from
-/// 20 ms with 9 workers to 7 ms with 3 (#11294).
+/// 20 ms with 9 workers to 7 ms with 3 (#11294). Under a core plan ([`cores`]), no more
+/// workers than the CPUs it leaves the helper threads: one more would only wait for the others.
 pub fn default_workers() -> usize {
-    workers_for(worker_count(), performance_cores)
+    let workers = workers_for(worker_count(), performance_cores);
+    cores::helper_cpus().map_or(workers, |cpus| workers.min(cpus).max(1))
 }
 
 /// [`default_workers`] for `cores` cores, of which `performance` (asked only here, the
@@ -241,8 +245,11 @@ fn parse_worker_count(value: Option<String>) -> Option<usize> {
 /// a frame back either): user-interactive quality of service on macOS,
 /// above-normal priority on Windows. Nothing elsewhere: Linux lets an
 /// unprivileged thread lower its priority but not raise it (and the JVM
-/// leaves it there too). Whether the OS took it.
+/// leaves it there too). Whether the OS took it. Under a core plan the
+/// thread may also run on the cores kept for it, whichever thread started it
+/// ([`cores::free_favoured`]).
 pub fn favour_current() -> bool {
+    cores::free_favoured();
     if std::thread::available_parallelism().map_or(1, |n| n.get()) <= 4 {
         return false;
     }
@@ -357,8 +364,14 @@ pub fn put_helpers_behind() {
 /// more), the idle class, which runs the thread only when no ordinary thread
 /// wants its core. A tick or a frame then gets a core when it starts instead
 /// of waiting behind them. Nothing elsewhere. Whether the OS took it.
+/// Under a core plan, on Linux and Windows, the helper also stays off the
+/// cores kept for those threads ([`cores::confine_helper`]).
 pub fn behind_server() -> bool {
-    HELPERS_BEHIND.load(Ordering::Relaxed) && behind()
+    if !HELPERS_BEHIND.load(Ordering::Relaxed) {
+        return false;
+    }
+    cores::confine_helper();
+    behind()
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -397,7 +410,9 @@ fn behind() -> bool {
 /// step: utility quality of service on macOS (background would throttle it to a
 /// crawl on battery) and below-normal priority on Windows, so the helpers that
 /// mesh and light the chunks around the player go first. Whether the OS took it.
+/// Under a core plan it stays off the kept cores as every helper does.
 pub fn far_terrain_current() -> bool {
+    cores::confine_helper();
     far()
 }
 
@@ -457,8 +472,10 @@ fn far_back() -> bool {
 /// Run the calling thread only on a core nothing else wants: work that may
 /// take seconds and that nothing waits for yet (the stronghold rings while a
 /// world opens). The idle class on Linux, background quality of service on
-/// macOS, idle priority on Windows. Whether the OS took it.
+/// macOS, idle priority on Windows. Whether the OS took it. Under a core plan
+/// it stays off the kept cores as every helper does.
 pub fn idle_current() -> bool {
+    cores::confine_helper();
     idle()
 }
 

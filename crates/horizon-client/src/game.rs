@@ -12234,6 +12234,22 @@ pub fn run_with() -> Result<()> {
     // Before any worker starts: on Linux they go behind the server thread
     // and the render thread.
     horizon_threads::put_helpers_behind();
+    // And they stay off the cores kept for the threads a frame or a tick waits for
+    // (horizon_threads::cores): a client's render thread and server thread, a dedicated
+    // server's server thread. Nothing on a machine too small for it, or with
+    // HORIZON_CORE_PLAN=off.
+    let favoured = if options.execution_role.is_client() {
+        2
+    } else {
+        1
+    };
+    if let Some(plan) = horizon_threads::cores::reserve(favoured) {
+        log::info!(
+            "Horizon: frames and ticks keep CPUs {}, the helper threads run on CPUs {}",
+            plan.reserved,
+            plan.helpers
+        );
+    }
     if options.execution_role.is_client() {
         // The render thread, like the server thread, ahead of the workers on
         // macOS and Windows. While terrain loads, the workers
