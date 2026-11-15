@@ -66,3 +66,6 @@ only. They do not pass to forks, ports or derived launchers, whatever their lice
 
 A build made from source without a client ID of its own says that sign-in is not configured; that is
 the expected state for a fork until its own app is approved.
+
+This repository's own builds take the other way: they ship the game without the launcher, which
+needs no sign-in at all ([offline-build.md](offline-build.md)).

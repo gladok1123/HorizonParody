@@ -106,7 +106,8 @@ possible; the launcher just doesn't offer it on its own.
 - **Who isn't affected:** the game binary itself (`horizon-client`, `horizon-ctl launch`, the
   harnesses, CI), the dedicated server and `horizon-server`, the website. There is no bypass flag:
   the launcher's tests use accounts in a memory store (`MemoryStore`, and `HORIZON_NO_KEYCHAIN`
-  for the CLI and MCP tests, which then have no owner).
+  for the CLI and MCP tests, which then have no owner). This repository's playable build is that
+  game binary with a start script and no launcher ([offline-build.md](offline-build.md)).
 
 ## Downloading the game for an owner
 

@@ -1,0 +1,197 @@
+name: Offline build
+
+# The game without the launcher and without an account, for this fork (docs/offline-build.md): horizon-client's own
+# executable, horizon-ctl, horizon-prepare and horizon-server for Windows x64 and Linux x86_64, published as the
+# release offline-v<packaging/offline/VERSION>. It runs on GitHub's runners only and takes no secret: nothing of
+# Minecraft's is built in or downloaded, so the exporters are compiled on the player's machine instead
+# (tools/package_offline.sh).
+#
+# A push that changes the version, the packaging or this file builds and publishes again; the release of that
+# version is replaced.
+on:
+  push:
+    paths:
+      - 'packaging/offline/**'
+      - 'tools/package_offline.sh'
+      - '.github/workflows/offline-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: offline-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            # The oldest Ubuntu image, as game-build.yml: the programs then run on every glibc since 2.35.
+            os: ubuntu-22.04
+            dir: horizon-offline-linux-x86_64
+            asset: horizon-offline-linux-x86_64.tar.gz
+          - name: windows
+            os: windows-latest
+            dir: horizon-offline-windows-x64
+            asset: horizon-offline-windows-x64.zip
+            exe: .exe
+            # The C runtime linked in, so the game runs without the Visual C++ redistributable.
+            rustflags: -C target-feature=+crt-static
+    runs-on: ${{ matrix.os }}
+    # A private repository's runners have two cores: the release profile (thin LTO, one codegen unit) takes them
+    # far longer than the 40 minutes game-build.yml allows on four.
+    timeout-minutes: 170
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
+      BIN: target/release
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: The version
+        run: |
+          set -euo pipefail
+          version=$(tr -d ' \r\n' < packaging/offline/VERSION)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::packaging/offline/VERSION is not N.N.N: $version"; exit 1; }
+          # Built in (horizon_core::release): --version, the log's first line and crash reports say it.
+          echo "HORIZON_VERSION=offline-$version" >> "$GITHUB_ENV"
+      - name: The start scripts parse
+        # Before the long build, which a typing mistake in a script would waste.
+        run: |
+          set -euo pipefail
+          bash -n packaging/offline/play.sh
+          bash -n tools/package_offline.sh
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            powershell -NoProfile -Command '$errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "packaging/offline/play.ps1").Path, [ref]$null, [ref]$errors); if ($errors) { $errors | ForEach-Object { Write-Host $_ }; exit 1 }'
+          fi
+      - name: Stable Rust
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustc --version
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: offline-${{ matrix.name }}
+          # A build that fails in the last crate still keeps the hour the others took.
+          cache-on-failure: true
+      - name: ALSA and udev headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
+      - name: Build the game, horizon-ctl, horizon-prepare and horizon-server
+        # horizon-client's own executable, not horizon-official: none of the parts that reach Horizon's services
+        # or send the player to Horizon's launcher are registered in it (docs/forking.md).
+        run: >-
+          cargo build --release --locked
+          -p horizon-client --bin horizon-client
+          -p horizon-client-lib --bin horizon-ctl
+          -p horizon-prepare --bin horizon-prepare
+          -p horizon-server --bin horizon-server
+      - name: Only system libraries
+        # Windows: no DLL that Windows does not ship. Linux: the libraries every desktop distribution has.
+        run: |
+          set -euo pipefail
+          for binary in horizon-client horizon-ctl horizon-prepare horizon-server; do
+            ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/check_imports.py "$BIN/$binary${{ matrix.exe }}"
+          done
+      - name: Every program starts
+        run: |
+          set -euo pipefail
+          # Even --help must never touch real player data.
+          export HORIZON_HOME="$RUNNER_TEMP/horizon-home"
+          mkdir -p "$HORIZON_HOME"
+          "$BIN/horizon-client${{ matrix.exe }}" --help | grep -q -- '--name'
+          "$BIN/horizon-ctl${{ matrix.exe }}" --help > /dev/null
+          "$BIN/horizon-prepare${{ matrix.exe }}" --help | grep -q -- '--minecraft-dir'
+          for binary in horizon-prepare horizon-server; do
+            out=$("$BIN/$binary${{ matrix.exe }}" --version | tr -d '\r')
+            echo "$out"
+            [[ "$out" == "$binary $HORIZON_VERSION" ]] || { echo "::error::expected $binary $HORIZON_VERSION"; exit 1; }
+          done
+      - name: Package
+        run: |
+          set -euo pipefail
+          tools/package_offline.sh "$BIN" "dist/${{ matrix.dir }}" "${{ matrix.exe }}"
+          # Windows x64: Microsoft's DXC, pinned and checksummed, which DirectX 12 uses on integrated GPUs.
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            python tools/ci/fetch_dxc.py "dist/${{ matrix.dir }}"
+          fi
+      - name: The start script reaches the preparer
+        # The runner has no Minecraft: the script must take the name, run horizon-prepare and stop at its error,
+        # without starting the game. That is as far as a runner can follow a player's first run.
+        run: |
+          set -euo pipefail
+          export HORIZON_PLAYER_NAME=Tester
+          export HORIZON_MINECRAFT_DIR="$RUNNER_TEMP/no-minecraft"
+          export HORIZON_HOME="$RUNNER_TEMP/horizon-home"
+          mkdir -p "$HORIZON_MINECRAFT_DIR"
+          cd "dist/${{ matrix.dir }}"
+          status=0
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            cmd //c play.bat < /dev/null > "$RUNNER_TEMP/play.log" 2>&1 || status=$?
+          else
+            ./play.sh < /dev/null > "$RUNNER_TEMP/play.log" 2>&1 || status=$?
+          fi
+          cat "$RUNNER_TEMP/play.log"
+          [[ "$status" -ne 0 ]] || { echo "::error::the start script succeeded without Minecraft"; exit 1; }
+          grep -q 'Preparing Horizon from your Minecraft' "$RUNNER_TEMP/play.log"
+          grep -q 'Preparing failed' "$RUNNER_TEMP/play.log"
+          # Nothing the test run wrote goes into the archive.
+          rm -rf .local game player-name.txt server.jar
+      - name: Archive
+        run: |
+          set -euo pipefail
+          cd dist
+          case "${{ matrix.asset }}" in
+            *.tar.gz) tar czf "${{ matrix.asset }}" "${{ matrix.dir }}" ;;
+            *) 7z a -tzip "${{ matrix.asset }}" "${{ matrix.dir }}" > /dev/null ;;
+          esac
+          ls -l "${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: publish the release
+    needs: build
+    # Also when one system's build failed: the other's archive is still worth publishing.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: packaging/offline
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: The release, replacing an earlier one of the same version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version=$(tr -d ' \r\n' < packaging/offline/VERSION)
+          tag="offline-v$version"
+          ls -l dist
+          (cd dist && sha256sum horizon-offline-* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release delete "$tag" --yes --cleanup-tag
+          fi
+          gh release create "$tag" dist/* --target "$GITHUB_SHA" \
+            --title "Horizon offline $version" --notes-file packaging/offline/RELEASE_NOTES.md

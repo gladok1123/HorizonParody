@@ -36,6 +36,7 @@ To play, use [the launcher](../launcher/README.md); the project site is [playhor
 - [Cosmetics](cosmetics.md): wearable items drawn only by Horizon clients (hats, back items, shoulder pets, name tag styles), with no gameplay effect, client-side visibility toggles and the JSON item format.
 - [Layers](layers.md): engine, platform and Horizon: what belongs to each, where a new feature goes, the dependency rule, every built-in outside address.
 - [Forking](forking.md): the `horizon-extras` feature that holds Horizon's own extras (cosmetics, Friends, its settings pages...), and building the game without them.
+- [The offline build](offline-build.md): this fork's playable build, the game without the launcher and without an account: what is in the folder, the start script, the workflow that publishes it to Releases.
 - [Translations](translations.md): where Horizon's own text and its ~85 languages live, the unreviewed mark on machine-written strings, and how a native speaker reviews a language in #translations on Discord.
 - [Narrator](narrator.md): vanilla's text-to-speech (Ctrl+B): the voices per platform, how screens record what they narrate, `horizon-ctl narration`, and where it still differs from vanilla.
 - [Shader packs](shaders.md): Horizon's own WGSL shader packs, how to make and check one (`horizon-shader`).

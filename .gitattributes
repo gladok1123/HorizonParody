@@ -4,3 +4,8 @@ docs/launcher-commands.md text eol=lf
 docs/horizon-ctl-commands.md text eol=lf
 crates/horizon-theme/tokens.css text eol=lf
 docs/api/*-reference.md text eol=lf
+# The offline build's start scripts (docs/offline-build.md): each with its own system's line ends on every
+# checkout, since tools/package_offline.sh copies them as they are.
+packaging/offline/play.bat text eol=crlf
+packaging/offline/play.ps1 text eol=crlf
+packaging/offline/play.sh text eol=lf

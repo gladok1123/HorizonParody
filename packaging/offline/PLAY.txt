@@ -1,0 +1,55 @@
+Horizon, offline build: Minecraft Java Edition 26.3, rewritten in Rust
+=======================================================================
+
+Horizon is an unofficial fan project, not affiliated with, endorsed by or
+connected to Mojang Studios or Microsoft. Minecraft is a trademark of Mojang
+and Microsoft. This folder contains none of Minecraft's code, textures or
+sounds: Horizon prepares them from your own copy of Minecraft Java Edition.
+
+This build has no launcher and asks for no account. You choose a player name
+and play: single player, LAN, and servers that do not check accounts
+(online-mode=false). A server that checks accounts refuses the name, as it
+refuses any player who is not signed in.
+
+What the first run needs
+  1. Minecraft Java Edition 26.3, installed by the official launcher and
+     started once, so its files are on this computer.
+  2. A Java 25 JDK (not only a runtime: the first run compiles Horizon's own
+     exporters with javac), for example Eclipse Temurin 25 from adoptium.net.
+
+Playing
+  Windows: double-click play.bat.     Linux: ./play.sh
+  The first run asks for a player name (kept in player-name.txt; delete the
+  file to choose another), prepares the resources (a few minutes, once), and
+  starts the game. Later runs start the game at once.
+  Saves, options, screenshots and logs are in the game folder here.
+
+What the first run does
+  It runs, in this folder:
+    horizon-prepare --prepare --complete
+  horizon-prepare reads your Minecraft 26.3 from the official launcher's
+  folder and checks every file against the checksums in research-lock.json.
+  It also needs the 26.3 server jar. The start script looks for server.jar in
+  this folder; without one it downloads the address your launcher's
+  versions/26.3/26.3.json names (downloads.server.url, Mojang's own download).
+  To give it yourself, save it here as server.jar or set HORIZON_SERVER_JAR.
+  If the game is elsewhere, set HORIZON_MINECRAFT_DIR to that folder. For a
+  Prism Launcher or MultiMC install run, once, by hand:
+    horizon-prepare --prepare --complete --prism-dir PATH
+  horizon-prepare --help lists the other options.
+
+Starting the game yourself
+  horizon-client --resources .local/horizon-client/26.3 --game-dir game --name NAME
+  horizon-client --help lists the options.
+
+Controls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl
+sprint, left click break, right click place/use, 1-9 or scroll for the hotbar,
+E inventory, Q drop, F1 hide the HUD, F3 debug, Esc pause.
+
+Also in this folder
+  horizon-ctl     plays the game from a terminal or a script (horizon-ctl help)
+  horizon-server  hosts a server with this game as its engine:
+    horizon-server --dir my-server init
+    horizon-server --dir my-server start
+  Its settings are in my-server/server.toml; players of this build join only
+  with online_mode = false there.
